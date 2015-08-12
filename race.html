@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html>
+<body bgcolor="#000000" topmargin="0" leftmargin="0" rightmargin="0">
+
+<canvas id="canvas" width="1500" height="540" style="background: url('img/fal170630_285.jpg')">
+</canvas>
+
+<script>
+    BIKE_COUNT = 5;
+    BIKE_SPRITE_COUNT = 6;
+    BIKE_SPRITE_WIDTH = 70;
+    BIKE_SPRITE_HEIGHT = 87;
+    BIKE_STEP = 5;
+    LANE_WIDTH = 1500;
+    LANE_HEIGHT = 103;
+    TRACK_TOP = 10;
+    TRACK_LEFT = 10;
+    _STOP = 0;
+    _READY = 1;
+    _FIN = 2;
+    
+    var bikePos = [0];
+    var spriteItem = [0];
+
+    for(var i=0;i<BIKE_COUNT;i++) {
+        bikePos[i]=0;
+    }
+    for(var i=0;i<BIKE_SPRITE_COUNT;i++) {
+        spriteItem[i]=0;
+    }
+    var race_status = _READY;
+    var lane_satus = [0];
+    for(var i=0;i<BIKE_COUNT;i++) {
+        lane_satus[i]=_STOP;
+    }
+
+// initialize sprites
+	var canvas = document.getElementById("canvas");
+    var context = canvas.getContext('2d');
+    var bikeSprite = new Image();   
+    bikeSprite.src="img/BikePokemonSprite.png";
+    bikeSprite.onload = function() {
+        for(var i=0;i<BIKE_COUNT;i++) {
+            context.drawImage(bikeSprite,
+                              0,i*BIKE_SPRITE_HEIGHT, // clip origin
+                              BIKE_SPRITE_WIDTH,BIKE_SPRITE_HEIGHT, // sprite size
+                              TRACK_LEFT,TRACK_TOP+i*LANE_HEIGHT,  // position
+                              BIKE_SPRITE_WIDTH,BIKE_SPRITE_HEIGHT); // draw size
+        }
+    }
+    var winImg = new Image();   
+    winImg.src="img/stars-gold.png";
+
+    var hurdleImg = new Image();   
+    hurdleImg.src="img/hurdle.png";
+    hurdleImg.onload =  function() {
+        for(var i=0;i<BIKE_COUNT;i++) {
+            context.drawImage(hurdleImg,TRACK_LEFT+BIKE_SPRITE_WIDTH,TRACK_TOP+(i+0.1)*LANE_HEIGHT);
+        }
+    }
+    
+//    sockURI = "ws://" + window.location.host + "/ws/bikemsg";
+    var sockURI="ws://iot-bike.mybluemix.net/ws/bikemsg"
+    
+    function setupWebSocket() {
+// Receive messages
+        this.sock = new WebSocket(sockURI);
+
+        this.sock.onopen = function(){ 
+            console.log("Connected to "+sockURI);
+        };
+        this.sock.onerror = function(){
+            console.log("WebSocket ERROR "+sockURI);
+        };
+        this.sock.onclose = function() {
+            console.log("WebSocket CLOSE "+sockURI);
+            setTimeout(setupWebSocket,100);
+        };
+        this.sock.onmessage = function(evt){
+
+            console.log(evt);
+            var bikeData = JSON.parse(evt.data);
+            var i=Number(bikeData.bikeID);
+
+            if(race_status===_READY) {
+                if(lane_satus[i]===_READY) {
+                    moveBike(i);
+                }
+                showMessage(i,evt);
+            }
+        }
+	};
+    
+    function moveBike(i) {
+        spriteItem[i]++;
+        if(spriteItem[i]===BIKE_SPRITE_COUNT) {
+            spriteItem[i]=0;
+        }
+        if(bikePos[i]===LANE_WIDTH-50) {
+            lane_satus[i]=_FIN;
+            race_status=_FIN;
+            context.drawImage(winImg,LANE_WIDTH-150,TRACK_TOP+i*LANE_HEIGHT);
+        }
+
+        context.clearRect(TRACK_LEFT+bikePos[i], TRACK_TOP+i*LANE_HEIGHT, BIKE_SPRITE_WIDTH, BIKE_SPRITE_HEIGHT);
+        context.drawImage(bikeSprite,
+                          spriteItem[i]*BIKE_SPRITE_WIDTH,i*BIKE_SPRITE_HEIGHT, // clip origin
+                          BIKE_SPRITE_WIDTH,BIKE_SPRITE_HEIGHT, // sprite size
+                          TRACK_LEFT+bikePos[i],TRACK_TOP+i*LANE_HEIGHT,  // position
+                          BIKE_SPRITE_WIDTH,BIKE_SPRITE_HEIGHT); // draw size
+        bikePos[i]+=BIKE_STEP;
+    }
+    
+    function showMessage(i,evt) {
+        context.clearRect(TRACK_LEFT+20,TRACK_TOP+(i+1)*LANE_HEIGHT-20,LANE_WIDTH,15);
+        context.font = "15px Arial";
+        context.fillStyle = '#FFFFFF';
+        now = new Date();
+        context.fillText(evt.data + " " + evt.timeStamp,TRACK_LEFT+20,TRACK_TOP+(i+1)*LANE_HEIGHT-10);
+    }
+    
+    canvas.ondblclick = function(e) {
+        var i=Math.floor(e.clientY/LANE_HEIGHT);
+        if(lane_satus[i]===_STOP) {
+            lane_satus[i]=_READY;
+            context.clearRect(TRACK_LEFT+bikePos[i]+BIKE_SPRITE_WIDTH,TRACK_TOP+(i+0.1)*LANE_HEIGHT,60,60);
+        } else {
+            lane_satus[i]=_STOP;
+            context.drawImage(hurdleImg,TRACK_LEFT+bikePos[i]+BIKE_SPRITE_WIDTH,TRACK_TOP+(i+0.1)*LANE_HEIGHT);
+        }
+    }
+    
+    setupWebSocket();
+</script>
+
+    
+</body>
+</html>
